@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>MistakeAI Pro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjs@11/lib/browser/math.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: "Segoe UI";
+  background: linear-gradient(135deg,#dbeafe,#eff6ff,#f0f9ff);
+  display:flex;justify-content:center;align-items:center;height:100vh;
+}
+
+.card{
+  width:520px;padding:25px;border-radius:25px;
+  background:white;box-shadow:0 20px 60px rgba(0,0,0,0.15);
+}
+
+.logo{
+  font-size:26px;font-weight:bold;color:#2563eb;text-align:center;
+}
+
+textarea{
+  width:100%;height:110px;margin-top:12px;
+  border-radius:14px;padding:12px;border:1px solid #e5e7eb;
+}
+
+button{
+  width:100%;margin-top:10px;padding:13px;
+  border-radius:14px;border:none;
+  background:linear-gradient(135deg,#3b82f6,#06b6d4);
+  color:white;cursor:pointer;
+}
+
+img{width:100%;margin-top:10px;border-radius:12px;}
+
+.box{padding:12px;border-radius:12px;margin-top:10px;}
+.red{background:#fee2e2;color:#991b1b;}
+.yellow{background:#fef3c7;color:#92400e;}
+.green{background:#dcfce7;color:#065f46;font-weight:bold;}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+<div class="logo">🤖 MistakeAI</div>
+
+<input type="file" id="image">
+<img id="preview">
+
+<button onclick="readImage()">📸 Đọc ảnh</button>
+
+<textarea id="input" placeholder="Ví dụ: (x+3)^2 = x^2 + 3x + 9"></textarea>
+
+<button onclick="analyze()">🔍 Phân tích</button>
+
+<div id="result"></div>
+</div>
+
+<script>
+
+// preview ảnh
+image.onchange = e=>{
+  preview.src = URL.createObjectURL(e.target.files[0]);
+};
+
+// OCR
+function readImage(){
+  let file=image.files[0];
+  if(!file) return alert("Chọn ảnh trước");
+
+  result.innerHTML="⏳ Đang đọc ảnh...";
+  Tesseract.recognize(file,'eng').then(r=>{
+    input.value=r.data.text;
+    result.innerHTML="✅ Đã đọc → sửa lại nếu sai";
+  });
+}
+
+// chuẩn hóa mạnh
+function norm(s){
+  return s.toLowerCase()
+    .replace(/÷/g,"/")
+    .replace(/×/g,"*")
+    .replace(/\)\(/g,")*(")
+    .replace(/(\d)(x)/g,"$1*$2")
+    .replace(/x(\d)/g,"x*$1")
+    .replaceAll(" ","");
+}
+
+// kiểm tra bằng toán thật
+function isEqual(l,r){
+  try{
+    return math.simplify(`(${l})-(${r})`).toString()==="0";
+  }catch{
+    return false;
+  }
+}
+
+// 🔥 FIX QUAN TRỌNG: luôn expand
+function getCorrect(expr){
+  try{
+    return math
+      .simplify(math.expand(expr))
+      .toString()
+      .replaceAll("*","");
+  }catch{
+    return null;
+  }
+}
+
+// 🧠 giải thích thông minh hơn
+function explain(expr){
+
+  if(expr.includes("/")){
+    return `
+👉 Dạng: Phân thức<br>
+• Phân tích tử thành nhân tử<br>
+• Rút gọn với mẫu<br>
+• Viết kết quả cuối
+`;
+  }
+
+  if(expr.includes("^2")){
+    return `
+👉 Dạng: Bình phương<br>
+• (a+b)^2 = a^2 + 2ab + b^2<br>
+• (a-b)^2 = a^2 - 2ab + b^2
+`;
+  }
+
+  if(expr.includes(")(")){
+    return `
+👉 Dạng: Nhân đa thức<br>
+• Nhân từng hạng tử rồi cộng lại
+`;
+  }
+
+  if(expr.includes("x^2-")){
+    return `
+👉 Dạng: Hiệu hai bình phương<br>
+• a^2 - b^2 = (a-b)(a+b)
+`;
+  }
+
+  return `
+👉 Rút gọn hai vế rồi so sánh
+`;
+}
+
+// UI
+function show(e,r,a){
+  result.innerHTML=`
+  ${e?`<div class="box red">❌ <b>Lỗi:</b><br>${e}</div>`:""}
+  ${r?`<div class="box yellow">⚠️ <b>Hướng dẫn:</b><br>${r}</div>`:""}
+  ${a?`<div class="box green">✅ <b>Đáp án đúng:</b><br>${a}</div>`:""}
+  `;
+}
+
+// MAIN
+function analyze(){
+
+  let raw=input.value.trim();
+
+  if(!raw){
+    show("Chưa nhập bài","","");
+    return;
+  }
+
+  if(!raw.includes("=")){
+    show("Thiếu dấu '='","","");
+    return;
+  }
+
+  let parts = raw.split("=");
+
+  if(parts.length !== 2){
+    show("Chỉ nhập 1 dấu '=' thôi","","");
+    return;
+  }
+
+  let left = norm(parts[0]);
+  let right = norm(parts[1]);
+
+  try{
+
+    // đúng
+    if(isEqual(left,right)){
+      show("","🎉 Bạn làm đúng rồi!","");
+      return;
+    }
+
+    // sai → phân tích
+    let ans = getCorrect(left);
+    let guide = explain(raw);
+
+    show(
+      "Hai vế không bằng nhau",
+      guide,
+      ans
+    );
+
+  }catch{
+    show(
+      "Không đọc được biểu thức",
+      "Có thể do OCR sai hoặc nhập lỗi",
+      "Hãy sửa lại"
+    );
+  }
+}
+
+</script>
+
+</body>
+</html>
